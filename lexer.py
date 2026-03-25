@@ -7,8 +7,7 @@ Token types
 KW   keyword:    let | if | while
 ID   identifier: [a-zA-Z_][a-zA-Z0-9_]*
 NUM  number:     [0-9]+
-OP   operator /
-     punctuation: = + < ( ) { } ;
+OP   operator & punctuation: = + < ( ) { } ;
 ERR  lexical error: unrecognised character (scanner continues)
 """
 
@@ -113,8 +112,16 @@ def lex(source):
         # ── Emit token or report error ────────────────────────────────────
         if last_acc_state is not None:
             lexeme = source[i : last_acc_pos + 1]
-            tokens.append((_ACCEPTING[last_acc_state], lexeme))
-            i = last_acc_pos + 1
+            next_pos = last_acc_pos + 1
+            if _ACCEPTING[last_acc_state] == 'NUM' and next_pos < n and source[next_pos] in _LETTERS:
+                k = next_pos
+                while k < n and source[k] in _ID_CHARS:
+                    k += 1
+                tokens.append(('ERR', source[i:k]))
+                i = k
+            else:
+                tokens.append((_ACCEPTING[last_acc_state], lexeme))
+                i = last_acc_pos + 1
         else:
             tokens.append(('ERR', source[i]))
             i += 1

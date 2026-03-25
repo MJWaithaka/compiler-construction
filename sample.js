@@ -1,4 +1,4 @@
-let limit = 10;
+let limit = 10f;
 let sum = 1; 
 while (sum < limit) { 
     sum = sum + 1; 
