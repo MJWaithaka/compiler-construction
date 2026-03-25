@@ -93,6 +93,36 @@ def lex(source):
             i += 1
             continue
 
+        # ── Check for comments (Unmatched string/comment error) ───────────
+        if source.startswith('/*', i):
+            end_idx = source.find('*/', i + 2)
+            if end_idx == -1:
+                # Lexical error: Unmatched comment
+                tokens.append(('ERR', "Unmatched comment: " + source[i:i+15] + "..."))
+                break # Reached EOF
+            else:
+                i = end_idx + 2
+                continue
+
+        # ── Check for strings (Unmatched string error) ────────────────────
+        if source[i] == '"':
+            end_idx = source.find('"', i + 1)
+            # Find next newline to bound the string search
+            nl_idx = source.find('\n', i + 1)
+            if end_idx == -1 or (nl_idx != -1 and nl_idx < end_idx):
+                # Lexical error: Unmatched string within the line
+                err_text = source[i:nl_idx] if nl_idx != -1 else source[i:]
+                tokens.append(('ERR', "Unmatched string: " + err_text))
+                if nl_idx != -1:
+                    i = nl_idx
+                else:
+                    break
+                continue
+            else:
+                tokens.append(('STR', source[i:end_idx+1]))
+                i = end_idx + 1
+                continue
+
         # ── Maximal-munch scan ────────────────────────────────────────────
         state          = 'A'
         last_acc_state = None
@@ -112,10 +142,37 @@ def lex(source):
         # ── Emit token or report error ────────────────────────────────────
         if last_acc_state is not None:
             lexeme = source[i : last_acc_pos + 1]
-            tokens.append((_ACCEPTING[last_acc_state], lexeme))
+            tok_type = _ACCEPTING[last_acc_state]
+            
+            # 1 & 4 & 5. Invalid suffix check (e.g. 10f, 3num, 12$34)
+            # A number should generally be followed by an operator, space, or EOF
+            next_pos = last_acc_pos + 1
+            if tok_type == 'NUM' and next_pos < n:
+                nxt_char = source[next_pos]
+                if not nxt_char.isspace() and nxt_char not in _OP_CHARS:
+                    # Consume the malformed token until next space or operator
+                    k = next_pos
+                    while k < n and not source[k].isspace() and source[k] not in _OP_CHARS:
+                        k += 1
+                    tokens.append(('ERR', f"Invalid numeric format: '{source[i:k]}'"))
+                    i = k
+                    continue
+
+            # 2. Exceeding length limits
+            if tok_type == 'ID' and len(lexeme) > 31:
+                tokens.append(('ERR', f"Identifier exceeds length limit (31): '{lexeme}'"))
+                i = last_acc_pos + 1
+                continue
+            if tok_type == 'NUM' and int(lexeme) > 2147483647:
+                tokens.append(('ERR', f"Numeric literal out of bounds: '{lexeme}'"))
+                i = last_acc_pos + 1
+                continue
+
+            tokens.append((tok_type, lexeme))
             i = last_acc_pos + 1
         else:
-            tokens.append(('ERR', source[i]))
+            # 2. Appearance of illegal characters
+            tokens.append(('ERR', f"Illegal character: '{source[i]}'"))
             i += 1
 
     return tokens
