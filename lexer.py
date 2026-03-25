@@ -93,16 +93,7 @@ def lex(source):
             i += 1
             continue
 
-        # ── Check for comments (Unmatched string/comment error) ───────────
-        if source.startswith('/*', i):
-            end_idx = source.find('*/', i + 2)
-            if end_idx == -1:
-                # Lexical error: Unmatched comment
-                tokens.append(('ERR', "Unmatched comment: " + source[i:i+15] + "..."))
-                break # Reached EOF
-            else:
-                i = end_idx + 2
-                continue
+
 
         # ── Check for strings (Unmatched string error) ────────────────────
         if source[i] == '"':
@@ -144,22 +135,24 @@ def lex(source):
             lexeme = source[i : last_acc_pos + 1]
             tok_type = _ACCEPTING[last_acc_state]
             
-            # 1 & 4 & 5. Invalid suffix check (e.g. 10f, 3num, 12$34)
-            # A number should generally be followed by an operator, space, or EOF
+            # 1 & 4 & 5. Invalid suffix check (e.g. 10f, 3num, 12$34, err12$34)
+            # A valid token must be followed by an operator, space, or EOF.
+            # If followed by an illegal character, it taints the whole token.
             next_pos = last_acc_pos + 1
-            if tok_type == 'NUM' and next_pos < n:
+            if tok_type in ('NUM', 'ID', 'KW') and next_pos < n:
                 nxt_char = source[next_pos]
                 if not nxt_char.isspace() and nxt_char not in _OP_CHARS:
                     # Consume the malformed token until next space or operator
                     k = next_pos
                     while k < n and not source[k].isspace() and source[k] not in _OP_CHARS:
                         k += 1
-                    tokens.append(('ERR', f"Invalid numeric format: '{source[i:k]}'"))
+                    err_kind = 'numeric' if tok_type == 'NUM' else 'identifier'
+                    tokens.append(('ERR', f"Invalid {err_kind} format: '{source[i:k]}'"))
                     i = k
                     continue
 
             # 2. Exceeding length limits
-            if tok_type == 'ID' and len(lexeme) > 31:
+            if tok_type in ('ID', 'KW') and len(lexeme) > 31:
                 tokens.append(('ERR', f"Identifier exceeds length limit (31): '{lexeme}'"))
                 i = last_acc_pos + 1
                 continue
@@ -171,7 +164,7 @@ def lex(source):
             tokens.append((tok_type, lexeme))
             i = last_acc_pos + 1
         else:
-            # 2. Appearance of illegal characters
+            # Appearance of illegal characters that are standalone
             tokens.append(('ERR', f"Illegal character: '{source[i]}'"))
             i += 1
 
