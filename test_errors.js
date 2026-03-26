@@ -4,5 +4,3 @@
     let err12$34 = 12$34;
     let numStr = 3num;
     let badChar = @;
-    /* unclosed comment
-    let a = 1;

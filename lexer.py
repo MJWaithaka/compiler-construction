@@ -33,7 +33,7 @@ _KW_TRANSITIONS = {
 _LETTERS   = set(string.ascii_letters + '_')
 _DIGITS    = set(string.digits)
 _ID_CHARS  = _LETTERS | _DIGITS
-_OP_CHARS  = set('=+<(){};')
+_OP_CHARS  = set('=+<>(){};')
 
 # Accepting states and their token types
 _ACCEPTING = {
@@ -87,6 +87,14 @@ def lex(source):
     i = 0
     n = len(source)
 
+    # Precompute line number for each character position
+    _line_at = [1] * n
+    line = 1
+    for pos in range(n):
+        _line_at[pos] = line
+        if source[pos] == '\n':
+            line += 1
+
     while i < n:
         # Skip whitespace
         if source[i].isspace():
@@ -127,25 +135,25 @@ def lex(source):
                     while k < n and not source[k].isspace() and source[k] not in _OP_CHARS:
                         k += 1
                     err_kind = 'numeric' if tok_type == 'NUM' else 'identifier'
-                    tokens.append(('ERR', f"Invalid {err_kind} format: '{source[i:k]}'"))
+                    tokens.append(('ERR', f"Invalid {err_kind} format: '{source[i:k]}'", _line_at[i]))
                     i = k
                     continue
 
             # 2. Exceeding length limits
             if tok_type in ('ID', 'KW') and len(lexeme) > 31:
-                tokens.append(('ERR', f"Identifier exceeds length limit (31): '{lexeme}'"))
+                tokens.append(('ERR', f"Identifier exceeds length limit (31): '{lexeme}'", _line_at[i]))
                 i = last_acc_pos + 1
                 continue
             if tok_type == 'NUM' and int(lexeme) > 2147483647:
-                tokens.append(('ERR', f"Numeric literal out of bounds: '{lexeme}'"))
+                tokens.append(('ERR', f"Numeric literal out of bounds: '{lexeme}'", _line_at[i]))
                 i = last_acc_pos + 1
                 continue
 
-            tokens.append((tok_type, lexeme))
+            tokens.append((tok_type, lexeme, _line_at[i]))
             i = last_acc_pos + 1
         else:
             # Appearance of illegal characters that are standalone
-            tokens.append(('ERR', f"Illegal character: '{source[i]}'"))
+            tokens.append(('ERR', f"Illegal character: '{source[i]}'", _line_at[i]))
             i += 1
 
     return tokens
@@ -173,18 +181,18 @@ if __name__ == '__main__':
     print("-" * 60)
 
     token_list = lex(sample)
-    for idx, (tok, lex_) in enumerate(token_list, 1):
-        print(f"{idx:<4} {tok:<6} {lex_!r}")
+    for tok, lex_, line_no in token_list:
+        print(f"{line_no:<4} {tok:<6} {lex_!r}")
 
     print("-" * 60)
     print(f"Total tokens: {len(token_list)}")
 
     # Verify no ERR tokens in the clean sample
-    errors = [(i, t, l) for i, (t, l) in enumerate(token_list, 1) if t == 'ERR']
+    errors = [(t, l, ln) for t, l, ln in token_list if t == 'ERR']
     if errors:
         print("\nLexical errors:")
-        for pos, tok, lex_ in errors:
-            print(f"  Token #{pos}: {tok} {lex_!r}")
+        for tok, lex_, line_no in errors:
+            print(f"  Line {line_no}: {tok} {lex_!r}")
     else:
         print("No lexical errors.")
 
